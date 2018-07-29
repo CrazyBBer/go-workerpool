@@ -8,9 +8,6 @@ import (
   
 )
 
-func init() {
-	log.SetLevel(5)
-}
 
 var rnd = func() *rand.Rand {
 	return rand.New(rand.NewSource(time.Now().UnixNano()))
