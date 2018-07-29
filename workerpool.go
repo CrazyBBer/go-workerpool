@@ -46,18 +46,14 @@ func (wp *workerPool) Start() {
 	}
 	wp.stopCh = make(chan struct{})
 	stopCh := wp.stopCh
-	log.Debugf(nil, "workerPool stop chan created at %p", stopCh)
 	go func() {
 		var scratch []*workerChan
 		for {
-			log.Debugf(nil, "default scratch len：%d address is %p", len(scratch), &scratch)
 			wp.clean(&scratch)
 			select {
 			case <-stopCh:
-				log.Debugf(nil, "workerpool singnal to stop received from %p", stopCh)
 				return
 			default:
-				log.Debugf(nil, "watch dog will sleep %d Sec", wp.getMaxIdleWorkerDuration()/time.Second)
 				time.Sleep(wp.getMaxIdleWorkerDuration())
 			}
 		}
@@ -68,7 +64,6 @@ func (wp *workerPool) Stop() {
 	if wp.stopCh == nil {
 		panic("BUG: workerPool wasn't started")
 	}
-	log.Debugf(nil, "notice workerPool %p to exit", &wp.stopCh)
 	close(wp.stopCh)
 	wp.stopCh = nil
 
@@ -79,13 +74,9 @@ func (wp *workerPool) Stop() {
 	ready := wp.ready
 	for i, ch := range ready {
 		ch.act <- nil
-		log.Debugf(nil, "notice action channel %p to exit", &ch.act)
 		ready[i] = nil
 	}
 	wp.ready = ready[:0]
-	if wp.ready == nil {
-		log.Debugf(nil, "current wp.ready is empty at %p", &wp.ready)
-	}
 
 	wp.mustStop = true
 	wp.lock.Unlock()
@@ -102,7 +93,7 @@ func (wp *workerPool) getMaxIdleWorkerDuration() time.Duration {
 func (wp *workerPool) clean(scratch *[]*workerChan) {
 	maxIdleWorkerDuration := wp.getMaxIdleWorkerDuration()
 
-	log.Debugf(nil, "prepre cleaning timeout worker :maxIdleWorkerDuration is %d Sec", maxIdleWorkerDuration/time.Second)
+
 	// Clean least recently used workers if they didn't serve connections
 	// for more than maxIdleWorkerDuration.
 	currentTime := time.Now()
@@ -110,23 +101,10 @@ func (wp *workerPool) clean(scratch *[]*workerChan) {
 	wp.lock.Lock()
 	ready := wp.ready
 	n := len(ready)
-	log.Debugf(nil, "current ready worker count: %d", n)
+
 	i := 0
 	for i < n && currentTime.Sub(ready[i].lastUseTime) > maxIdleWorkerDuration {
 		i++
-	}
-	log.Debugf(nil, "current scratch address is : %p", scratch)
-
-	if header := (*scratch)[:0]; header == nil {
-		log.Debugf(nil, "current scratch header is nil at address %p", &header)
-	} else {
-		log.Debugf(nil, "current scratch header is not empty at address %p", &header)
-	}
-
-	if end := ready[:i]; end == nil {
-		log.Debugf(nil, "current scratch end is nil at address %p", &end)
-	} else {
-		log.Debugf(nil, "current scratch end is not empty at address %p, len is %d", &end, len(end))
 	}
 	*scratch = append((*scratch)[:0], ready[:i]...)
 	if i > 0 {
@@ -143,7 +121,6 @@ func (wp *workerPool) clean(scratch *[]*workerChan) {
 	// may be blocking and may consume a lot of time if many workers
 	// are located on non-local CPUs.
 	tmp := *scratch
-	log.Debugf(nil, "current tmp worker scratched to exit len is %d", len(tmp))
 	for i, ch := range tmp {
 		log.Debugf(nil, "ch index %d was noticed to exit,last use %s", i, ch.lastUseTime)
 		ch.act <- nil
@@ -181,21 +158,18 @@ func (wp *workerPool) getCh() *workerChan {
 	wp.lock.Lock()
 	ready := wp.ready
 	n := len(ready) - 1
-	log.Debugf(nil, "ready worker queue len: %d,plan to fech index %d", len(ready), n)
+
 	if n < 0 {
 		if wp.workersCount < wp.MaxWorkersCount {
-			log.Debugf(nil, "current workersCount %d  MaxWorkersCount %d", wp.workersCount, wp.MaxWorkersCount)
+
 			createWorker = true
 			wp.workersCount++
-			log.Debugf(nil, "the workersCount %d will be created", wp.workersCount)
 		} else {
-			log.Debugf(nil, "new work got,but max worker level reached, current workersCount %d, we will create new", wp.workersCount)
 			createWorker = true
 			wp.workersCount++
 		}
 	} else {
 		ch = ready[n]
-		log.Debugf(nil, "got a workchan at %p", ch)
 		ready[n] = nil
 		wp.ready = ready[:n] //shirink the ready slice
 	}
@@ -203,26 +177,20 @@ func (wp *workerPool) getCh() *workerChan {
 
 	if ch == nil {
 		if !createWorker {
-			log.Debugf(nil, "some critical error happened for workerChan at %p", &ch)
 			return nil
 		}
 		//retrieve the hot pool
-		log.Debugf(nil, "retrieve the hot pool for workerChan at %p", &wp.workerChanPool)
 		vch := wp.workerChanPool.Get()
 		if vch == nil {
 			vch = &workerChan{
 				act: make(chan Action, workerChanCap),
 			}
-			log.Debugf(nil, "retrieve pool , but got nothing, will created one at %p", vch)
 		}
 		ch = vch.(*workerChan)
-		log.Debugf(nil, "target workChan(cast) at %p", ch)
 	}
 	go func() {
-		log.Debugf(nil, "new goroutine created for %p", ch)
 		wp.workerFunc(ch)
 		wp.workerChanPool.Put(ch)
-		log.Debugf(nil, "work done,put workChan %p into hot pool", ch)
 	}()
 	// got the workChan
 
@@ -236,7 +204,6 @@ func (wp *workerPool) release(ch *workerChan) bool {
 		wp.lock.Unlock()
 		return false
 	}
-	log.Debugf(nil, "put workChan %p into ready queue", ch)
 	wp.ready = append(wp.ready, ch)
 	wp.lock.Unlock()
 	return true
